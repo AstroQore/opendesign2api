@@ -1,0 +1,30 @@
+services:
+  opendesign2api:
+    image: ${OPENDESIGN2API_IMAGE:-ghcr.io/astroqore/opendesign2api:latest}
+    build: .
+    restart: unless-stopped
+    read_only: true
+    init: true
+    ports:
+      - "127.0.0.1:${OPENDESIGN2API_PORT:-8792}:8792"
+    environment:
+      OPENDESIGN2API_HOST: 0.0.0.0
+      OPENDESIGN2API_PORT: 8792
+      OPENDESIGN2API_CONFIG: /run/secrets/amr-config.json
+      OPENDESIGN2API_PROFILE: ${OPENDESIGN2API_PROFILE:-prod}
+      OPENDESIGN2API_KEY: ${OPENDESIGN2API_KEY:?Set a random local bridge key in .env}
+      OPENDESIGN2API_UPSTREAM_TIMEOUT: ${OPENDESIGN2API_UPSTREAM_TIMEOUT:-600}
+      OPENDESIGN2API_MAX_REQUEST_BYTES: ${OPENDESIGN2API_MAX_REQUEST_BYTES:-8388608}
+      OPENDESIGN2API_CLIENT_TIMEOUT: ${OPENDESIGN2API_CLIENT_TIMEOUT:-30}
+    volumes:
+      - type: bind
+        source: ${OPENDESIGN2API_CONFIG_FILE:?Set the absolute path to .amr/config.json in .env}
+        target: /run/secrets/amr-config.json
+        read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128

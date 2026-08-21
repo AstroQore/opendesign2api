@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Compile
+        run: python -m compileall -q src scripts tests
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Reject tracked credential files
+        shell: bash
+        run: |
+          if git ls-files | grep -E '(^|/)(auth\.json|config\.json|\.env)$'; then
+            echo "credential-like file is tracked" >&2
+            exit 1
+          fi
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Validate Compose
+        env:
+          OPENDESIGN2API_CONFIG_FILE: /tmp/synthetic-amr-config.json
+          OPENDESIGN2API_KEY: synthetic-local-key
+        run: docker compose config --quiet
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          load: true
+          push: false
+          tags: opendesign2api:test
+      - name: Smoke container without real credentials
+        shell: bash
+        run: |
+          printf '%s\n' '{"profiles":{"prod":{"runtimeKey":"synthetic-upstream-key","linkUrl":"https://upstream.invalid"}}}' > "$RUNNER_TEMP/amr-config.json"
+          chmod 0400 "$RUNNER_TEMP/amr-config.json"
+          sudo chown 10001:10001 "$RUNNER_TEMP/amr-config.json"
+          docker run -d --name opendesign2api-ci \
+            -p 127.0.0.1:8792:8792 \
+            -e OPENDESIGN2API_KEY=synthetic-local-key \
+            -v "$RUNNER_TEMP/amr-config.json:/run/secrets/amr-config.json:ro" \
+            opendesign2api:test
+          trap 'docker rm -f opendesign2api-ci >/dev/null 2>&1 || true' EXIT
+          for _ in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:8792/healthz; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs opendesign2api-ci
+          exit 1
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@dcedce43c6f43de0b836d1fe38946645c9c638dc # v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

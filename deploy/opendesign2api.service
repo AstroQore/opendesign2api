@@ -1,0 +1,36 @@
+[Unit]
+Description=opendesign2api OpenAI-compatible gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=opendesign2api
+Group=opendesign2api
+WorkingDirectory=/opt/opendesign2api
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/etc/opendesign2api/opendesign2api.env
+ExecStart=/usr/bin/python3 -u /opt/opendesign2api/src/server.py
+Restart=on-failure
+RestartSec=3s
+TimeoutStopSec=20s
+TasksMax=256
+UMask=0077
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+ReadOnlyPaths=/etc/opendesign2api
+
+[Install]
+WantedBy=multi-user.target
