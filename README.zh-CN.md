@@ -179,8 +179,10 @@ print(response.choices[0].message.content)
 client ──► CLIProxyAPI ──► 127.0.0.1:8792 ──► OpenDesign Link
 ```
 
-把它注册为一个 `openai-compatibility` provider。这里已验证的是 OpenAI 入口；没有
-单独证明 Claude 兼容端点时，不要凭名称补一条 `claude-api-key` pair。
+在 provider 层按 Cursor Direct 的方式注册：只建一个 `openai-compatibility` entry，
+CPA 不设置 `prefix`。网关保持透明，因此 CPA 继续暴露 `deepseek-v4-flash` 等上游
+原始模型名。这里已验证的是 OpenAI 入口；没有单独证明 Claude 兼容端点时，不要凭
+名称补一条 `claude-api-key` pair。
 
 ## 安全边界
 

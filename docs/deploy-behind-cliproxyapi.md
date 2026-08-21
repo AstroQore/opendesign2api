@@ -123,7 +123,6 @@ Read the live YAML style first. A typical `openai-compatibility` entry is:
 ```yaml
 openai-compatibility:
   - name: OpenDesign
-    prefix: opendesign
     base-url: http://127.0.0.1:8792/v1
     api-key-entries:
       - api-key: "<same-local-bridge-key>"
@@ -132,8 +131,9 @@ openai-compatibility:
         alias: ""
 ```
 
-With `prefix: opendesign`, CPA normally exposes the canary as
-`opendesign/deepseek-v4-flash`. Confirm the exact behavior on the current CPA build.
+This matches Cursor Direct at the provider layer: CPA stores complete model ids and
+the provider entry has no `prefix` field. The gateway is transparent, so the ids stay
+exactly as OpenDesign returns them.
 
 This is a single OpenAI-compatible provider. Do not add a Claude pair unless
 OpenDesign separately documents and you verify a Claude-compatible endpoint.

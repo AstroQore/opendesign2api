@@ -45,7 +45,9 @@ class DelayedSSEHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "text/event-stream")
         self.send_header("Connection", "close")
         self.end_headers()
-        self.wfile.write(b'data: {"choices":[{"delta":{"content":"FIRST"}}]}\n\n')
+        self.wfile.write(
+            b'data: {"model":"test-model","choices":[{"delta":{"content":"FIRST"}}]}\n\n'
+        )
         self.wfile.flush()
         self.server.first_sent.set()  # type: ignore[attr-defined]
         self.server.release.wait(timeout=5)  # type: ignore[attr-defined]
@@ -122,11 +124,18 @@ class GatewayTests(unittest.TestCase):
         self.assertEqual(status, 401)
         self.assertEqual(json.loads(payload)["error"]["code"], "invalid_api_key")
 
-        fake = FakeResponse([b'{"object":"list","data":[]}'])
+        fake = FakeResponse(
+            [
+                b'{"object":"list","data":['
+                b'{"id":"test-model"},{"id":"another-model"}]}'
+            ]
+        )
         with mock.patch.object(server.urllib.request, "urlopen", return_value=fake) as opened:
             status, _, payload = self.request("GET", "/v1/models", headers=self.auth_headers())
         self.assertEqual(status, 200)
         self.assertEqual(json.loads(payload)["object"], "list")
+        ids = [item["id"] for item in json.loads(payload)["data"]]
+        self.assertEqual(ids, ["test-model", "another-model"])
         upstream_request = opened.call_args.args[0]
         self.assertEqual(upstream_request.get_header("Authorization"), "Bearer synthetic-upstream-key")
         self.assertNotIn(b"synthetic-upstream-key", payload)
@@ -139,16 +148,22 @@ class GatewayTests(unittest.TestCase):
         }
         fake = FakeResponse([json.dumps(upstream_payload).encode()])
         body = json.dumps(
-            {"model": "test-model", "messages": [{"role": "user", "content": "ping"}]}
+            {
+                "model": "test-model",
+                "messages": [{"role": "user", "content": "ping"}],
+            }
         ).encode()
         headers = {**self.auth_headers(), "Content-Type": "application/json"}
-        with mock.patch.object(server.urllib.request, "urlopen", return_value=fake):
+        with mock.patch.object(server.urllib.request, "urlopen", return_value=fake) as opened:
             status, response_headers, payload = self.request(
                 "POST", "/v1/chat/completions", body=body, headers=headers
             )
         self.assertEqual(status, 200)
         self.assertEqual(response_headers["Content-Type"], "application/json")
         self.assertEqual(json.loads(payload)["choices"][0]["message"]["content"], "OK")
+        self.assertEqual(json.loads(payload)["model"], "test-model")
+        upstream_body = json.loads(opened.call_args.args[0].data)
+        self.assertEqual(upstream_body["model"], "test-model")
 
     def test_upstream_error_redacts_runtime_key(self) -> None:
         upstream_error = server.urllib.error.HTTPError(
@@ -166,8 +181,8 @@ class GatewayTests(unittest.TestCase):
 
     def test_streaming_chat_flushes_all_sse_chunks(self) -> None:
         chunks = [
-            b'data: {"choices":[{"delta":{"content":"ST"}}]}\n\n',
-            b'data: {"choices":[{"delta":{"content":"REAM"}}]}\n\n',
+            b'data: {"model":"test-model","choices":[{"delta":{"content":"ST"}}]}\n\n',
+            b'data: {"model":"test-model","choices":[{"delta":{"content":"REAM"}}]}\n\n',
             b"data: [DONE]\n\n",
         ]
         fake = FakeResponse(chunks, "text/event-stream")
@@ -186,6 +201,7 @@ class GatewayTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(response_headers["Content-Type"], "text/event-stream")
         self.assertIn(b'"content":"ST"', payload)
+        self.assertIn(b'"model":"test-model"', payload)
         self.assertTrue(payload.endswith(b"data: [DONE]\n\n"))
 
     def test_streaming_forwards_first_event_before_upstream_finishes(self) -> None:
@@ -236,6 +252,7 @@ class GatewayTests(unittest.TestCase):
             self.assertTrue(upstream_started)
             self.assertTrue(forwarded_before_release, "gateway buffered SSE until upstream EOF")
             self.assertIn(b'"content":"FIRST"', first_line[0])
+            self.assertIn(b'"model":"test-model"', first_line[0])
         finally:
             upstream.release.set()  # type: ignore[attr-defined]
             connection.close()

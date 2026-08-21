@@ -186,9 +186,11 @@ The safe topology is:
 client ──► CLIProxyAPI ──► 127.0.0.1:8792 ──► OpenDesign Link
 ```
 
-Register it as one `openai-compatibility` provider. OpenDesign exposes an OpenAI
-endpoint here; do not invent a paired `claude-api-key` entry without a separately
-verified Claude-compatible endpoint.
+Register it like Cursor Direct at the provider layer: use one
+`openai-compatibility` entry with no CPA-side `prefix`. The gateway stays transparent,
+so CPA exposes the original upstream model ids such as `deepseek-v4-flash`.
+OpenDesign exposes an OpenAI endpoint here; do not invent a paired `claude-api-key`
+entry without a separately verified Claude-compatible endpoint.
 
 ## Security model
 
