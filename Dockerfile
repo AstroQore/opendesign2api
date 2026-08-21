@@ -1,4 +1,4 @@
-FROM python:3.13-slim
+FROM python:3.14-slim
 
 LABEL org.opencontainers.image.source="https://github.com/AstroQore/opendesign2api"
 LABEL org.opencontainers.image.description="OpenDesign Cloud to OpenAI-compatible gateway"
